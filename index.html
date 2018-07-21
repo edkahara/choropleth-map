@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Choropleth Map</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+	  <meta name="description" content="This is a Choropleth Map built using D3.js">
+	  <meta name="keywords" content="HTML, CSS, JAVASCRIPT, D3.js">
+	  <meta name="author" content="Edward Njoroge">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+    <script src="https://d3js.org/topojson.v2.min.js"></script>
+    <style>
+      #main {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background-color: #f2f2f2;
+        width: 1400px;
+        margin-top: 20px;
+      }
+      .states {
+        fill: none;
+        stroke: #fff;
+        stroke-linejoin: round;
+      }
+    </style>
+  </head>
+  <body>
+    <h1 class="text-center">United States Educational Attainment</h1>
+    <h4 class="text-center">Percentage of adults age 25 and older with a bachelor's degree or higher (2010-2014)</h4>
+    <div id="main"></div>
+    <script>
+      var path = d3.geoPath();
+      var tooltip = d3.select("body").append("div")
+        .style('width', '200px')
+        .style('position', 'relative')
+        .style('background', '#d1e0e0')
+        .style('border', '1px solid grey')
+        .style('border-radius', '5px')
+        .style('opacity', '0');//create tooltip div
+      var canvas = d3.select("#main").append("svg")
+        .attr("width", 1400)
+        .attr("height", 600)
+        .attr("transform", "translate(50, 0)");//create canvas
+      var colorScale = d3.scaleThreshold()
+        .domain(d3.range(2.6, 75.1, (75.1-2.6)/8))
+        .range(d3.schemeGreens[9]);
+      var counties = "https://raw.githubusercontent.com/no-stack-dub-sack/testable-projects-fcc/master/src/data/choropleth_map/counties.json";
+      var education = "https://raw.githubusercontent.com/no-stack-dub-sack/testable-projects-fcc/master/src/data/choropleth_map/for_user_education.json";
+      d3.queue()
+        .defer(d3.json, counties)
+        .defer(d3.json, education)
+        .await(drawMap);
+      function drawMap(error, counties, education) {
+        if (error) throw error;
+        var cantons = topojson.feature(counties, counties["objects"]["counties"]).features;
+        cantons.sort(function(a, b) {
+          return d3.ascending(a["id"], b["id"]);
+        });//sort the county data
+        console.log(cantons[0]);
+        canvas.append("g").selectAll("path").data(cantons).enter().append("path")
+          .attr("transform", "translate(150, 0)")
+          .attr("fill", function(d, i) { return colorScale(education[i]["bachelorsOrHigher"]); })
+          .attr("d", path)
+          .on('mouseover', function(d) {
+            tooltip.transition()
+              .style('opacity', '1')
+              tooltip.html(function() {
+                var result = education.filter(function( obj ) { return obj["fips"] == d["id"]; });
+                if(result[0]){
+                  return result[0]['area_name'] + ', ' + result[0]['state'] + ': ' + result[0]["bachelorsOrHigher"] + '%'
+                }
+                return 0;
+              })
+              .style('left', ((d3.event.pageX+7)+'px'))
+              .style('top', ((d3.event.pageY-70)+'px'))
+            d3.select(this).attr("stroke", "black")
+          })
+          .on('mouseout', function(d) {
+            tooltip.transition()
+              .style('opacity', '0')
+            d3.select(this).attr("stroke", "none")
+          });//draw counties
+        canvas.append("path")
+          .attr("transform", "translate(150, 0)")
+          .datum(topojson.mesh(counties, counties["objects"]["states"], function(a, b) { return a !== b; }))
+          .attr("class", "states")
+          .attr("d", path);//draw states
+        var legendScale = d3.scaleLinear()
+          .domain([2.6, 75.1])
+          .rangeRound([600, 860]);//set legend scale
+        var legend = canvas.selectAll("rect")
+          .data(colorScale.range().map(function(d) {
+              d = colorScale.invertExtent(d);
+              if (d[0] == null) d[0] = legendScale.domain()[0];
+              if (d[1] == null) d[1] = legendScale.domain()[1];
+              return d;
+            }))
+          .enter().append("rect")
+            .attr("height", 8)
+            .attr("x", function(d) { return 150+legendScale(d[0]); })
+            .attr("y", 50)
+            .attr("width", function(d) { return legendScale(d[1]) - legendScale(d[0]); })
+            .attr("fill", function(d) { return colorScale(d[0]); })
+          .style("fill", function(d, i) { return colorScale[i]; });//create the legend's rectangles
+        var legendXAxis = d3.axisBottom(legendScale).tickArguments([5]).tickValues(colorScale.domain()).tickFormat(function(x) { return Math.round(x) + '%'; });//create x-axis
+        canvas.append("g")
+          .attr("transform", "translate(150, 58)")
+          .call(legendXAxis);//display the legend's x-axis
+      };
+    </script>
+  </body>
+</html>
